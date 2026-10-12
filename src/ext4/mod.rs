@@ -159,7 +159,7 @@ pub struct Ext4 {
     /// filesystem-wide spin lock.
     inode_mutation_locks: Vec<spin::Mutex<()>>,
     /// Advisory positive mappings, versioned by metadata-mutation epoch.
-    prepared_extents: spin::Mutex<prepared_extent::PreparedExtentCache>,
+    prepared_extents: spin::Mutex<Box<prepared_extent::PreparedExtentCache>>,
     prepare_stats: PrepareStats,
 }
 
@@ -910,7 +910,7 @@ impl Ext4 {
             write_barrier: true,
             direct_restore_clean: false,
             inode_mutation_locks,
-            prepared_extents: spin::Mutex::new(prepared_extent::PreparedExtentCache::new()),
+            prepared_extents: spin::Mutex::new(Box::new(prepared_extent::PreparedExtentCache::new())),
             prepare_stats: PrepareStats::new(),
         })
     }

@@ -28,3 +28,9 @@ Upstream mango's direct-range unit test still expected a one-block write
 to be rejected after its actual minimum was reduced to one block. That
 failure was reproduced on the pristine upstream revision. Only the stale
 test expectation was updated; production write behavior was preserved.
+
+The fixed prepared-extent cache is heap-owned rather than embedded in Ext4.
+This preserves the cache and write features while reducing large by-value
+load/return frames; the inline cache overflowed KaleidOS's existing 16 KiB
+Task stack during real read-only mount. The provider also owns Ext4 in a Box
+and keeps mount outside the server's inlined dispatch frame.
