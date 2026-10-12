@@ -305,8 +305,9 @@ impl<'a> ExtentNode<'a> {
     }
 
     /// Get a immutable reference to the extent header
-    pub fn header(&self) -> &ExtentHeader {
-        unsafe { &*(self.raw_data.as_ptr() as *const ExtentHeader) }
+    pub fn header(&self) -> ExtentHeader {
+        assert!(self.raw_data.len() >= size_of::<ExtentHeader>());
+        unsafe { core::ptr::read_unaligned(self.raw_data.as_ptr().cast::<ExtentHeader>()) }
     }
 
     pub fn entry_capacity(&self) -> usize {
@@ -314,13 +315,23 @@ impl<'a> ExtentNode<'a> {
     }
 
     /// Get a immutable reference to the extent at a given position
-    pub fn extent_at(&self, pos: usize) -> &Extent {
-        unsafe { &*((self.header() as *const ExtentHeader).add(1) as *const Extent).add(pos) }
+    pub fn extent_at(&self, pos: usize) -> Extent {
+        let offset = size_of::<ExtentHeader>()
+            + pos
+                .checked_mul(size_of::<Extent>())
+                .expect("extent offset overflow");
+        let bytes = &self.raw_data[offset..offset + size_of::<Extent>()];
+        unsafe { core::ptr::read_unaligned(bytes.as_ptr().cast::<Extent>()) }
     }
 
     /// Get a immmutable reference to the extent indexat a given position
-    pub fn extent_index_at(&self, pos: usize) -> &ExtentIndex {
-        unsafe { &*((self.header() as *const ExtentHeader).add(1) as *const ExtentIndex).add(pos) }
+    pub fn extent_index_at(&self, pos: usize) -> ExtentIndex {
+        let offset = size_of::<ExtentHeader>()
+            + pos
+                .checked_mul(size_of::<ExtentIndex>())
+                .expect("extent offset overflow");
+        let bytes = &self.raw_data[offset..offset + size_of::<ExtentIndex>()];
+        unsafe { core::ptr::read_unaligned(bytes.as_ptr().cast::<ExtentIndex>()) }
     }
 
     /// Find the extent that covers the given logical block number.
@@ -696,5 +707,27 @@ mod tests {
         leaf.init(0, 0);
         leaf.insert_extent(&Extent::new(8, 100, 1), 0).unwrap();
         assert_eq!(leaf.as_immut().search_extent(7), Err(0));
+    }
+}
+
+#[cfg(test)]
+mod unaligned_extent_tests {
+    use super::*;
+    #[repr(align(8))]
+    struct Buffer([u8; 25]);
+    #[test]
+    fn immutable_extent_views_decode_unaligned_bytes_by_value() {
+        let mut buffer = Buffer([0; 25]);
+        let bytes = &mut buffer.0[1..];
+        bytes[..2].copy_from_slice(&0xf30au16.to_le_bytes());
+        bytes[2..4].copy_from_slice(&1u16.to_le_bytes());
+        bytes[4..6].copy_from_slice(&1u16.to_le_bytes());
+        bytes[12..16].copy_from_slice(&7u32.to_le_bytes());
+        bytes[16..18].copy_from_slice(&1u16.to_le_bytes());
+        bytes[20..24].copy_from_slice(&99u32.to_le_bytes());
+        let node = ExtentNode::from_bytes(bytes);
+        assert!(node.header().check_magic());
+        assert_eq!(node.extent_at(0).start_lblock(), 7);
+        assert_eq!(node.extent_at(0).start_pblock(), 99);
     }
 }

@@ -215,10 +215,8 @@ impl DirBlock {
         {
             return Ok(DirBlockLayout::Htree);
         }
-        if let Ok(()) = self.validate_leaf(seed, ino, ino_gen, metadata_csum) {
-            return Ok(DirBlockLayout::Leaf);
-        }
-        Err(Ext4Error::new(ErrCode::EIO))
+        self.validate_leaf(seed, ino, ino_gen, metadata_csum)?;
+        Ok(DirBlockLayout::Leaf)
     }
 
     fn validate_leaf(
@@ -270,6 +268,9 @@ impl DirBlock {
                 || file_type > FileType::SymLink as u8
             {
                 return Err(Ext4Error::new(ErrCode::EIO));
+            }
+            if core::str::from_utf8(&self.0.data[offset + 8..offset + 8 + name_len]).is_err() {
+                return Err(Ext4Error::new(ErrCode::ENOTSUP));
             }
             offset += rec_len;
         }
@@ -630,6 +631,20 @@ mod tests {
         checksum = crc32(checksum, &[0; 4]);
         raw.data[tail_offset + 4..tail_offset + 8].copy_from_slice(&checksum.to_le_bytes());
         DirBlock::new(raw)
+    }
+
+    #[test]
+    fn unsupported_name_bytes_are_rejected_before_constructing_a_string() {
+        let mut block = valid_block();
+        block.0.data[8] = 0xff;
+        block.set_checksum(seed(), 2, 9);
+        assert_eq!(
+            block
+                .validate(seed(), 2, 9, true, false, false)
+                .unwrap_err()
+                .code(),
+            ErrCode::ENOTSUP
+        );
     }
 
     #[test]

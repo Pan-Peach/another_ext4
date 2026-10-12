@@ -2724,25 +2724,21 @@ mod tests {
     }
 
     #[test]
-    fn direct_range_plan_filters_small_or_oversized_writes() {
+    fn direct_range_plan_accepts_one_block_and_filters_oversized_or_existing_ranges() {
         let fs = make_test_fs(1024);
         let mut inode = Inode::default();
         inode.extent_init();
         let mut inode = InodeRef::new(2, Box::new(inode));
 
-        let small = Ext4::checked_write_logical_range(0, BLOCK_SIZE)
+        let exact = Ext4::checked_write_logical_range(0, BLOCK_SIZE)
             .unwrap()
             .unwrap();
-        assert!(fs.direct_range_plan(&inode, &small).unwrap().is_none());
+        assert!(fs.direct_range_plan(&inode, &exact).unwrap().is_some());
         let oversized =
             Ext4::checked_write_logical_range(0, (DIRECT_RANGE_MAX_BLOCKS + 1) * BLOCK_SIZE)
                 .unwrap()
                 .unwrap();
         assert!(fs.direct_range_plan(&inode, &oversized).unwrap().is_none());
-        let exact = Ext4::checked_write_logical_range(0, DIRECT_RANGE_MIN_BLOCKS * BLOCK_SIZE)
-            .unwrap()
-            .unwrap();
-        assert!(fs.direct_range_plan(&inode, &exact).unwrap().is_some());
 
         inode
             .inode

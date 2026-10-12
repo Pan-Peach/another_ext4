@@ -348,7 +348,7 @@ impl SuperBlock {
 
     /// Filesystem block size in bytes.
     pub fn block_size(&self) -> u64 {
-        1024u64 << self.log_block_size
+        1024u64.checked_shl(self.log_block_size).unwrap_or(0)
     }
 
     /// Convert cluster count to block count.

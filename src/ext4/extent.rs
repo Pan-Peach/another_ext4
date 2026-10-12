@@ -77,7 +77,7 @@ impl Ext4 {
             .checked_add(last.block_count() as PBlockId)
             .ok_or_else(|| Ext4Error::new(ErrCode::EFBIG))?;
         let candidate = Extent::new(start_lblock, preferred_first, count as u16);
-        let can_merge = Extent::can_append(last, &candidate);
+        let can_merge = Extent::can_append(&last, &candidate);
         let root_full = entries == header.max_entries_count() as usize;
         if root_full && !can_merge {
             return Ok(None);
@@ -228,13 +228,13 @@ impl Ext4 {
             }
             depth = node.header().depth();
             if depth == 0 {
-                let extent = *node.extent_at(entries - 1);
+                let extent = node.extent_at(entries - 1);
                 return Ok(Some(Self::tail_description(&extent)));
             }
             next = Some(node.extent_index_at(entries - 1).leaf());
         }
 
-        let extent = *root.extent_at(root.header().entries_count() as usize - 1);
+        let extent = root.extent_at(root.header().entries_count() as usize - 1);
         Ok(Some(Self::tail_description(&extent)))
     }
 

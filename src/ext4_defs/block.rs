@@ -15,7 +15,9 @@ where
 {
     /// Default implementation that deserializes the object from a byte array.
     fn from_bytes(bytes: &[u8]) -> Self {
-        unsafe { core::ptr::read(bytes.as_ptr() as *const Self) }
+        assert!(bytes.len() >= size_of::<Self>());
+        // Disk bytes do not carry the alignment of their decoded type.
+        unsafe { core::ptr::read_unaligned(bytes.as_ptr() as *const Self) }
     }
     /// Default implementation that serializes the object to a byte array.
     fn to_bytes(&self) -> &[u8] {
@@ -296,5 +298,21 @@ mod block_device_tests {
                 .code(),
             ErrCode::EINVAL
         );
+    }
+}
+
+#[cfg(test)]
+mod unaligned_disk_tests {
+    use super::*;
+    #[repr(C)]
+    #[derive(Debug, PartialEq)]
+    struct Word(u32);
+    unsafe impl AsBytes for Word {}
+    #[repr(align(8))]
+    struct Buffer([u8; 8]);
+    #[test]
+    fn deserialize_does_not_require_disk_buffer_alignment() {
+        let bytes = Buffer([0, 0x12, 0x34, 0x56, 0x78, 0, 0, 0]);
+        assert_eq!(Word::from_bytes(&bytes.0[1..5]), Word(0x78563412));
     }
 }
